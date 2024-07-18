@@ -11,6 +11,8 @@ class AABox:
     '''
     Axis-Aligned bounding box in the N-dim cartesian coordinate
     '''
+    
+    axes_vars = 'xyztuvwabcdefghijklmnopqrst'
     def __init__(self, ranges):
         '''
         Constructor
@@ -18,7 +20,7 @@ class AABox:
         Parameters
         ----------
         ranges : array-like
-            shape (N,2) holding two N-dimentional points.
+            shape (N,2) holding two N-dimensional points.
             The first point [:,0] is the minimum point of the bounding box.
             The second point [:,1] is the maximum point of the bounding box.
         '''
@@ -30,7 +32,7 @@ class AABox:
 
     def __repr__(self):
         s = 'Meta'
-        for i,var in enumerate('xyz'):
+        for i, var in enumerate(self.axes_vars[: len(self.shape)]):
             x0, x1 = self.ranges[i]
             s += f' {var}:({x0},{x1})'
         return s
@@ -57,6 +59,9 @@ class AABox:
     def z(self):
         return self._ranges[2]    
     
+    @property
+    def t(self):
+        return self._ranges[3]
 
     @property
     def ranges(self):
@@ -106,11 +111,19 @@ class AABox:
             True if this box overlaps with the subject.
         '''
 
-        x = self.x[1] > abox.x[0] and self.x[0] < abox.x[1]
-        y = self.y[1] > abox.y[0] and self.y[0] < abox.y[1]
-        z = self.z[1] > abox.z[0] and self.z[0] < abox.z[1]
+        does_overlap = True
+        for var in self.axes_vars[: len(self.shape)]:
+            does_overlap &= (
+                self._ranges[var][1] > abox._ranges[var][0]
+                and self._ranges[var][0] < abox._ranges[var][1]
+            )
 
-        return x and y and z
+        # x = self.x[1] > abox.x[0] and self.x[0] < abox.x[1]
+        # y = self.y[1] > abox.y[0] and self.y[0] < abox.y[1]
+        # z = self.z[1] > abox.z[0] and self.z[0] < abox.z[1]
+        # return x and y and z
+
+        return does_overlap
 
     def norm_coord(self, pos):
         '''
@@ -221,7 +234,7 @@ class VoxelMeta(AABox):
        
     def __repr__(self):
         s = 'Meta'
-        for i,var in enumerate('xyz'):
+        for i, var in enumerate(self.axes_vars[: len(self.shape)]):
             bins = self.shape[i]
             x0, x1 = self.ranges[i]
             s += f' {var}:({x0},{x1},{bins})'
@@ -272,13 +285,14 @@ class VoxelMeta(AABox):
 
         Parameters
         ----------
-        idx : array-like (2D or 3D)
-            An array of positions in terms of voxel index along xyz axis
+        idx : array-like (N-dim)
+            An array of positions in terms of voxel index along each axis
 
         Returns
         -------
         torch.Tensor
             A 1D array of voxel IDs corresponding to the input axis index(es)
+            to the flattened voxel array.
         '''
 
         idx = torch.as_tensor(idx)
@@ -286,8 +300,10 @@ class VoxelMeta(AABox):
         if len(idx.shape) == 1:
             idx = idx[None,:]
 
-        nx, ny = self.shape[:2]
-        vox = idx[:,0] + idx[:,1]*nx + idx[:,2]*nx*ny
+        # cumprod = [1, nx, nx*ny, nx*ny*nz, ...] shape (len(shape))
+        cumprod = torch.hstack([torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)])
+        # vox = idx[0]*1 + idx[1]*nx + idx[2]*nx*ny + ...
+        vox = torch.sum(idx * cumprod, axis=1)
 
         return vox.squeeze()
     
@@ -303,18 +319,20 @@ class VoxelMeta(AABox):
         Returns
         -------
         torch.Tensor
-            A list of index IDs. Shape (3) if the input is a single point. Otherwise (-1,3).
+            A list of index IDs. Shape (N) if the input is a single point, where N is the
+            number of dimensions of the volume. Otherwise (-1,N).
 
         '''
         voxel = torch.as_tensor(voxel)
-        nx, ny = self.shape[:2]
 
-        idx = torch.column_stack([
-            voxel % nx,
-            torch.floor_divide(voxel, nx) % ny,
-            torch.floor_divide(voxel, nx*ny)]
-            )
-
+        # cumprod = [1, nx, nx*ny, nx*ny*nz, ...]
+        cumprod = torch.hstack([torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)])
+        idx = torch.column_stack(
+            [
+                torch.floor_divide(voxel, cumprod[i]) % self.shape[i]
+                for i in range(len(self.shape))
+            ]
+        )
         return idx.squeeze()
 
     
@@ -465,7 +483,7 @@ class VoxelMeta(AABox):
         axis, axis_others = self.select_axis(axis)
         axis_a, axis_b = axis_others
 
-        grid = [None] * 3
+        grid = [None] * len(self.shape)
         grid[axis] = i
         grid[axis_a] = torch.arange(self.shape[axis_a])
         grid[axis_b] = torch.arange(self.shape[axis_b])
