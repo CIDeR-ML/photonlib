@@ -112,7 +112,7 @@ class AABox:
         '''
 
         does_overlap = True
-        for var in self.axes_vars[: len(self.shape)]:
+        for var in range(len(self.shape)):
             does_overlap &= (
                 self._ranges[var][1] > abox._ranges[var][0]
                 and self._ranges[var][0] < abox._ranges[var][1]
