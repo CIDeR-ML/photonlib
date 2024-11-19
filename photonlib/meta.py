@@ -46,7 +46,6 @@ class AABox:
     def device(self):
         return self._ranges.device
     
-
     @property
     def x(self):
         return self._ranges[0]
@@ -76,6 +75,10 @@ class AABox:
         Access the lengths of the box along each axis
         '''
         return self._lengths
+
+    @property
+    def shape(self):
+        return self._ranges.shape
 
     def update(self, ranges:torch.Tensor):
         assert self.ranges.shape == ranges.shape, f"Cannot update VoxelMeta ranges by changing dimensions!"
