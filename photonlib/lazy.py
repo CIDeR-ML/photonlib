@@ -73,7 +73,42 @@ class LazyTensor:
 
     def __getitem__(self, index):
         if self._src_type == 'h5py':
-            arr = self._h5_dataset[index]
+            # h5py only supports advanced (fancy) indexing when indices are strictly increasing.
+            # so if random order is needed, we need to assemble them manually.
+            ds = self._h5_dataset
+
+            # scalar/slice indexing
+            if isinstance(index, (int, np.integer)) or isinstance(index, slice) or (
+                isinstance(index, tuple) and all(isinstance(i, slice) for i in index)
+            ):
+                arr = ds[index]
+                tens = torch.as_tensor(arr, dtype=self._dtype)
+                if self._device.type != 'cpu':
+                    tens = tens.to(self._device)
+                return tens
+
+            # 1D index (list, tuple, or torch.Tensor)
+            if isinstance(index, torch.Tensor):
+                if index.dtype == torch.bool:
+                    idx_list = torch.nonzero(index, as_tuple=False).flatten().cpu().tolist()
+                else:
+                    idx_list = index.flatten().cpu().tolist()
+            elif isinstance(index, np.ndarray):
+                if index.dtype == np.bool_:
+                    idx_list = np.nonzero(index)[0].tolist()
+                else:
+                    idx_list = index.flatten().tolist()
+            elif isinstance(index, (list, tuple)):
+                idx_list = list(index)
+            else:
+                arr = ds[index]
+                tens = torch.as_tensor(arr, dtype=self._dtype)
+                if self._device.type != 'cpu':
+                    tens = tens.to(self._device)
+                return tens
+
+            rows = [ds[i] for i in idx_list]
+            arr = np.stack(rows, axis=0)
             tens = torch.as_tensor(arr, dtype=self._dtype)
             if self._device.type != 'cpu':
                 tens = tens.to(self._device)
