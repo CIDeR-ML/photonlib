@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 import h5py
 import torch
 import numpy as np
 from scipy.ndimage import sobel
 from .meta import VoxelMeta
+from .lazy import LazyTensor
 
 class PhotonLib:
-    def __init__(self, meta: VoxelMeta, vis:torch.Tensor, eff:float = 1.):
+    def __init__(self, meta: VoxelMeta, vis:torch.Tensor | h5py.Dataset, eff:float = 1., lazy:bool = False):
         '''
         Constructor
 
@@ -17,17 +20,21 @@ class PhotonLib:
             Visibility map as 1D array indexed by the voxel IDs
         eff  : float
             Overall scaling factor for the visibility. Does not do anything if 1.0
+        lazy : bool, optional
+            Whether to load the visibility map on demand. Default is False.
         '''
         self._meta = meta
         self._eff = torch.as_tensor(eff,dtype=torch.float32)
-        self._vis = torch.as_tensor(vis,dtype=torch.float32)
+        self._vis = LazyTensor(vis,dtype=torch.float32)
+        if not lazy:
+            self._vis = self._vis.materialize()
         self.grad_cache = None
 
     def contain(self, pts):
         return self._meta.contain(pts)
     
     @classmethod
-    def load(cls, cfg_or_fname:str):
+    def load(cls, cfg_or_fname:str, lazy:bool = False):
         '''
         Constructor method that can take either a config dictionary or the data file path
 
@@ -48,16 +55,20 @@ class PhotonLib:
         meta = VoxelMeta.load(filepath)
         
         print(f'[PhotonLib] loading {filepath}')
-        with h5py.File(filepath, 'r') as f:
-            vis = torch.as_tensor(f['vis'][:])
-            eff = torch.as_tensor(f.get('eff', default=1.))
+        file = h5py.File(filepath, 'r', swmr=True, libver='latest')
+        eff = torch.as_tensor(file.get('eff', default=1.))
+        if lazy:
+            vis = file['vis']
+        else:
+            vis = file['vis'][:]
+            file.close()
         print('[PhotonLib] file loaded')
 
         #pmt_pos = None
         #if pmt_loc is not None:
         #    pmt_pos = PhotonLib.load_pmt_loc(pmt_loc)
 
-        plib = cls(meta, vis, eff)
+        plib = cls(meta, vis, eff, lazy)
 
         return plib  
 
@@ -197,7 +208,6 @@ class PhotonLib:
     def view(self, arr):
         shape = list(self.meta.shape.numpy()[::-1]) + [-1]
         return torch.swapaxes(arr.reshape(shape), 0, 2)
-
     @property
     def vis_view(self):
         return self.view(self.vis)
@@ -228,7 +238,6 @@ class PhotonLib:
 
         if vis.ndim == 4:
             vis = np.swapaxes(vis, 0, 2).reshape(len(meta), -1)
-
         # TODO check dim(vis) and dim(meta)
 
         print('[PhotonLib] saving to', outpath)
