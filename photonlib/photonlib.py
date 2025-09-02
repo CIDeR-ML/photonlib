@@ -21,7 +21,7 @@ class PhotonLib:
         eff  : float
             Overall scaling factor for the visibility. Does not do anything if 1.0
         lazy : bool, optional
-            Whether to load the visibility map on demand. Default is False.
+            Whether to lazily load the visibility map. Default is False.
         '''
         self._meta = meta
         self._eff = torch.as_tensor(eff,dtype=torch.float32)
