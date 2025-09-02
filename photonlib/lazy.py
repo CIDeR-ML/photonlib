@@ -11,8 +11,8 @@ class LazyTensor:
 
     Parameters
     ----------
-    source : torch.Tensor | h5py.File
-        The source tensor or h5py file.
+    source : torch.Tensor | h5py.Dataset
+        The source tensor or h5py dataset (e.g. h5py.File['vis']).
     dtype : torch.dtype, optional
         The dtype of the tensor. Default is torch.float32.
     device : torch.device, optional

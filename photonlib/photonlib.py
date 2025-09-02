@@ -208,6 +208,7 @@ class PhotonLib:
     def view(self, arr):
         shape = list(self.meta.shape.numpy()[::-1]) + [-1]
         return torch.swapaxes(arr.reshape(shape), 0, 2)
+
     @property
     def vis_view(self):
         return self.view(self.vis)
@@ -238,6 +239,7 @@ class PhotonLib:
 
         if vis.ndim == 4:
             vis = np.swapaxes(vis, 0, 2).reshape(len(meta), -1)
+
         # TODO check dim(vis) and dim(meta)
 
         print('[PhotonLib] saving to', outpath)
