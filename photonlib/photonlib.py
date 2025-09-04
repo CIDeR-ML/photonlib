@@ -29,6 +29,7 @@ class PhotonLib:
         if not lazy:
             self._vis = self._vis.materialize()
         self.grad_cache = None
+        self._lazy = lazy
 
     def contain(self, pts):
         return self._meta.contain(pts)
@@ -100,7 +101,7 @@ class PhotonLib:
         if device is None or self.device == torch.device(device):
             return self
 
-        return PhotonLib(self.meta, self.vis.to(device), self.eff.to(device))
+        return PhotonLib(self.meta, self.vis.to(device), self.eff.to(device), lazy=self._lazy)
 
     def visibility(self, x):
         '''
