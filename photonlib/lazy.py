@@ -3,6 +3,28 @@ import torch
 import numpy as np
 
 
+class _H5Resource:
+    """shared resource for an h5py file+dataset with simple ref counting"""
+    def __init__(self, h5_file, dataset):
+        self.file = h5_file
+        self.dataset = dataset
+        self.refcount = 1
+
+    def incref(self):
+        self.refcount += 1
+
+    def decref(self):
+        self.refcount -= 1
+        if self.refcount <= 0:
+            try:
+                if self.file is not None:
+                    self.file.close()
+            except Exception:
+                pass
+            self.file = None
+            self.dataset = None
+
+
 class LazyTensor:
     """LazyTensor is a wrapper around a tensor or an h5py dataset.
 
@@ -22,10 +44,24 @@ class LazyTensor:
         self._dtype = dtype
         self._device = torch.device(device) if device is not None else torch.device('cpu')
 
-        if isinstance(source, (h5py.Dataset,)):
+        if isinstance(source, LazyTensor): # for `.to()`
+            self._src_type = source._src_type
+            if self._src_type == 'h5py':
+                self._h5 = source._h5
+                if self._h5 is not None:
+                    self._h5.incref()
+                self._length = source._length
+            else:
+                tens = source._tensor
+                if tens.dtype != self._dtype:
+                    tens = tens.to(self._dtype)
+                if self._device.type != 'cpu':
+                    tens = tens.to(self._device)
+                self._tensor = tens
+                self._length = self._tensor.shape[0]
+        elif isinstance(source, (h5py.Dataset,)):
             self._src_type = 'h5py'
-            self._h5_file = source.file
-            self._h5_dataset = source
+            self._h5 = _H5Resource(source.file, source)
             self._length = source.shape[0]
         else:
             # convert list-like to tensor
@@ -53,12 +89,13 @@ class LazyTensor:
     def to(self, device=None):
         if device is None or torch.device(device) == self._device:
             return self
-        return LazyTensor(self._get_source(), self._dtype, device)
+        # keep shared ownership of h5 resource when copying
+        return LazyTensor(self, self._dtype, device)
 
     def materialize(self):
         """load the entire data to a dense tensor on device. no-op if is a tensor"""
         if self._src_type == 'h5py':
-            arr = self._h5_dataset[:]
+            arr = self._h5.dataset[:]
             tens = torch.as_tensor(arr, dtype=self._dtype)
             if self._device.type != 'cpu':
                 tens = tens.to(self._device)
@@ -68,21 +105,21 @@ class LazyTensor:
 
     def _get_source(self):
         if self._src_type == 'h5py':
-            return self._h5_dataset
+            return self._h5.dataset
         return self._tensor
 
     def __getitem__(self, index):
         if self._src_type == 'h5py':
             # h5py only supports advanced (fancy) indexing when indices are strictly increasing.
             # so if random order is needed, we need to assemble them manually.
-            ds = self._h5_dataset
+            ds = self._h5.dataset
 
             # scalar/slice indexing
             if isinstance(index, (int, np.integer)) or isinstance(index, slice) or (
                 isinstance(index, tuple) and all(isinstance(i, slice) for i in index)
             ):
-                arr = ds[index]
-                tens = torch.as_tensor(arr, dtype=self._dtype)
+                arr = ds[index].astype(np.float32)
+                tens = torch.as_tensor(arr)
                 if self._device.type != 'cpu':
                     tens = tens.to(self._device)
                 return tens
@@ -101,14 +138,14 @@ class LazyTensor:
             elif isinstance(index, (list, tuple)):
                 idx_list = list(index)
             else:
-                arr = ds[index]
+                arr = ds[index].astype(np.float32)
                 tens = torch.as_tensor(arr, dtype=self._dtype)
                 if self._device.type != 'cpu':
                     tens = tens.to(self._device)
                 return tens
 
             rows = [ds[i] for i in idx_list]
-            arr = np.stack(rows, axis=0)
+            arr = np.stack(rows, axis=0).astype(np.float32)
             tens = torch.as_tensor(arr, dtype=self._dtype)
             if self._device.type != 'cpu':
                 tens = tens.to(self._device)
@@ -117,5 +154,9 @@ class LazyTensor:
             return self._tensor[index]
 
     def __del__(self):
-        if self._src_type == 'h5py':
-            self._h5_file.close()
+        if hasattr(self, '_src_type') and self._src_type == 'h5py':
+            try:
+                if hasattr(self, '_h5') and self._h5 is not None:
+                    self._h5.decref()
+            except Exception:
+                pass
