@@ -48,6 +48,7 @@ class PhotonLib:
 
         if isinstance(cfg_or_fname,dict):
             filepath=cfg_or_fname['photonlib']['filepath']
+            lazy=cfg_or_fname['photonlib'].get('lazy', False)
         elif isinstance(cfg_or_fname,str):
             filepath=cfg_or_fname
         else:
@@ -59,8 +60,10 @@ class PhotonLib:
         file = h5py.File(filepath, 'r', swmr=True, libver='latest')
         eff = torch.as_tensor(file.get('eff', default=1.))
         if lazy:
+            print('[PhotonLib] loading lazily')
             vis = file['vis']
         else:
+            print('[PhotonLib] loading fully')
             vis = file['vis'][:]
             file.close()
         print('[PhotonLib] file loaded')

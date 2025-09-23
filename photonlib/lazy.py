@@ -119,7 +119,7 @@ class LazyTensor:
                 isinstance(index, tuple) and all(isinstance(i, slice) for i in index)
             ):
                 arr = ds[index].astype(np.float32)
-                tens = torch.as_tensor(arr)
+                tens = torch.as_tensor(arr, dtype=self._dtype)
                 if self._device.type != 'cpu':
                     tens = tens.to(self._device)
                 return tens
@@ -144,8 +144,13 @@ class LazyTensor:
                     tens = tens.to(self._device)
                 return tens
 
-            rows = [ds[i] for i in idx_list]
-            arr = np.stack(rows, axis=0).astype(np.float32)
+            # check if indices are in ascending order
+            is_ascending = all(idx_list[i] < idx_list[i+1] for i in range(len(idx_list)-1))
+            if is_ascending:
+                arr = ds[idx_list].astype(np.float32)
+            else:
+                rows = [ds[i] for i in idx_list]
+                arr = np.stack(rows, axis=0).astype(np.float32)
             tens = torch.as_tensor(arr, dtype=self._dtype)
             if self._device.type != 'cpu':
                 tens = tens.to(self._device)
