@@ -8,7 +8,7 @@ from .meta import VoxelMeta
 from .lazy import LazyTensor
 
 class PhotonLib:
-    def __init__(self, meta: VoxelMeta, vis:torch.Tensor | h5py.Dataset, eff:float = 1., lazy:bool = False):
+    def __init__(self, meta: VoxelMeta, vis:torch.Tensor | h5py.Dataset, vis_mask:torch.Tensor | h5py.Dataset = None, eff:float = 1., lazy:bool = False):
         '''
         Constructor
 
@@ -22,12 +22,17 @@ class PhotonLib:
             Overall scaling factor for the visibility. Does not do anything if 1.0
         lazy : bool, optional
             Whether to lazily load the visibility map. Default is False.
+        vis_mask: torch.Tensor, optional
+           Mask for positions that shouldn't be counted in the visibility map
         '''
         self._meta = meta
         self._eff = torch.as_tensor(eff,dtype=torch.float32)
         self._vis = LazyTensor(vis,dtype=torch.float32)
+        self._vis_mask = LazyTensor(vis_mask,dtype=torch.bool)
+
         if not lazy:
             self._vis = self._vis.materialize()
+            self._vis_mask = self._vis_mask.materialize()
         self.grad_cache = None
         self._lazy = lazy
 
@@ -60,16 +65,19 @@ class PhotonLib:
         eff = torch.as_tensor(file.get('eff', default=1.))
         if lazy:
             vis = file['vis']
+            vis_mask = file['modified']
         else:
             vis = file['vis'][:]
+            vis_mask = file['modified'][:]
             file.close()
+
         print('[PhotonLib] file loaded')
 
         #pmt_pos = None
         #if pmt_loc is not None:
         #    pmt_pos = PhotonLib.load_pmt_loc(pmt_loc)
 
-        plib = cls(meta, vis, eff, lazy)
+        plib = cls(meta, vis, vis_mask,  eff, lazy)
 
         return plib  
 
@@ -101,7 +109,7 @@ class PhotonLib:
         if device is None or self.device == torch.device(device):
             return self
 
-        return PhotonLib(self.meta, self.vis.to(device), self.eff.to(device), lazy=self._lazy)
+        return PhotonLib(self.meta, vis=self.vis.to(device), vis_mask=self.vis_mask.to(device), eff=self.eff.to(device), lazy=self._lazy)
 
     def visibility(self, x):
         '''
@@ -205,6 +213,10 @@ class PhotonLib:
     @property
     def vis(self):
         return self._vis
+
+    @property
+    def vis_mask(self):
+        return self._vis_mask
 
     def view(self, arr):
         shape = list(self.meta.shape.numpy()[::-1]) + [-1]

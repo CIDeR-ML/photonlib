@@ -59,7 +59,7 @@ class LazyTensor:
                     tens = tens.to(self._device)
                 self._tensor = tens
                 self._length = self._tensor.shape[0]
-        elif isinstance(source, (h5py.Dataset,)):
+        elif hasattr(source, 'file') and hasattr(source, 'id'):
             self._src_type = 'h5py'
             self._h5 = _H5Resource(source.file, source)
             self._length = source.shape[0]
@@ -67,6 +67,11 @@ class LazyTensor:
             # convert list-like to tensor
             self._src_type = 'tensor'
             self._tensor = torch.as_tensor(source, dtype=self._dtype)
+
+            # Handle 0-dim tensors
+            if self._tensor.dim() == 0:
+                self._tensor = self._tensor.unsqueeze(0)
+
             if self._device.type != 'cpu':
                 self._tensor = self._tensor.to(self._device)
             self._length = self._tensor.shape[0]
