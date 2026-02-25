@@ -304,7 +304,10 @@ class VoxelMeta(AABox):
             idx = idx[None,:]
 
         # cumprod = [1, nx, nx*ny, nx*ny*nz, ...] shape (len(shape))
-        cumprod = torch.hstack([torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)])
+        cumprod = torch.hstack([
+            torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)
+        ]).to(idx.device)
+
         # vox = idx[0]*1 + idx[1]*nx + idx[2]*nx*ny + ...
         vox = torch.sum(idx * cumprod, axis=1)
 
@@ -329,7 +332,10 @@ class VoxelMeta(AABox):
         voxel = torch.as_tensor(voxel)
 
         # cumprod = [1, nx, nx*ny, nx*ny*nz, ...]
-        cumprod = torch.hstack([torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)])
+        cumprod = torch.hstack([
+            torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)
+        ]).to(ivoxel.device)
+
         idx = torch.column_stack(
             [
                 torch.floor_divide(voxel, cumprod[i]) % self.shape[i]
