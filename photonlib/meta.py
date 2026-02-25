@@ -334,7 +334,7 @@ class VoxelMeta(AABox):
         # cumprod = [1, nx, nx*ny, nx*ny*nz, ...]
         cumprod = torch.hstack([
             torch.tensor([1]), torch.cumprod(self.shape[:-1], 0)
-        ]).to(ivoxel.device)
+        ]).to(voxel.device)
 
         idx = torch.column_stack(
             [
