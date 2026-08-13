@@ -1,5 +1,8 @@
 _skbuild
+build/
+dist/
 *egg-info
+.pytest_cache/
 *~
 *.ipynb_checkpoints
 *.h5

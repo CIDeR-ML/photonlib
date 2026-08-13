@@ -1,46 +1,79 @@
-[![Documentation Status](https://readthedocs.org/projects/photonlib/badge/?version=latest)](https://photonlib.readthedocs.io/en/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/photonlib/badge/?version=latest)](https://photonlib.readthedocs.io/en/latest/)
 
-# Photon Library
-This is a python API to use Photon Library. This README describes how to install and where to find tutorials. For users, you might find a complimentary documentation at the [ReadTheDocs](https://photonlib.readthedocs.io/en/latest/). For developers, make sure you read the [Contribution Guide](/contributing.md).
+# PhotonLib
+
+PhotonLib is a small PyTorch-friendly API for loading and querying detector
+photon libraries. A photon library stores, for every voxel in a detector
+volume, the probability that a photon reaches each optical detector. Looking
+up those precomputed values is much faster than transporting every photon in a
+Monte Carlo simulation.
+
+The package supports dense in-memory libraries and lazy HDF5 access for tables
+that are too large to materialize. Visibility records may contain a traditional
+per-detector vector or higher-dimensional payloads such as detector waveforms.
 
 ## Installation
-Once `git clone` this repository, go inside and:
-```
-pip install .
-```
-After installation, you may need to download a data file and a tutorial notebook.
-These supportive materials are gathered in a publicly accessible folder in [this google drive link](https://drive.google.com/drive/folders/1IjRUMMVW7aiGWGcZFGRb9nT8dCRVYolE?usp=share_link).
 
-### Downloading a data file
-As explained below, Photon Library is a look-up table. To use, you have to download the table content data file.
-You can download and use the ICARUS data file as an example.
-After installation, executing the command below will download this datafile `plib.h5` in your current path:
-```
-download_icarus_plib.sh
+PhotonLib requires Python 3.10 or newer. Install a checkout with:
+
+```bash
+python -m pip install .
 ```
 
-### Simple tutorial
+For an editable development install with the test runner:
 
-Notebook is coming soon...
+```bash
+python -m pip install -e . pytest
+pytest -q
+```
 
-## What is Photon Library?
+## Quick start
 
-Photon Library refers to the technique used by neutrino experiments with Liquid Argon Time Projection Chambers (LArTPCs).
-Physics events (signal) in a LArTPC produce lots of photons (~20k/MeV) isotropically, and some of them are observed by optical detectors.
+```python
+import torch
+from photonlib import PhotonLib
 
-A typical physics event produces 100 million or sometimes more than billions of photons.
-Modeling the transportation of every single photon from the production point to individual optical detector with a monte-carlo simulation 
-(i.e. calculating every possible physics processes explicitly) take prohibitive amount of time.
+# lazy=True keeps the HDF5 visibility dataset on disk until rows are queried.
+library = PhotonLib.load("plib.h5", lazy=True)
 
-Instead, experiments pre-calculate the visibility, namely the probability for a photon produced at a position R to be observed by an optical detector D.
-Photon Library is a look-up table that stores the visibility values for the detector volume and all optical detectors in the detector.
-In this scheme, when simulating physics events, we can immediately estimate how many photons are detected by skipping calculating explicit physics processes.
+positions = torch.tensor([
+    [10.0, 20.0, 30.0],
+    [15.0, 25.0, 35.0],
+])
+visibility = library.visibility(positions)
 
-As it is a table, Photon Library discretizes positions in the detector and this means it loses some spatial resolution.
-We cal each entity a "voxel" (volume-pixel).
-The sides of each voxel is uniform along each axis, and typically the same across axis (i.e. a voxel is typically a cube).
-For example, in the ICARUS experiment, a voxel is a cube of 5 cm.
+print(library.meta)       # voxelization and coordinate bounds
+print(visibility.shape)   # (positions, optical detectors, ...)
+```
 
+Coordinates are expressed in the absolute coordinate system stored in the
+file. Queries outside that volume return zeros. Calling `PhotonLib.load()`
+without `lazy=True` loads the complete visibility table into memory.
 
-## How is Photon Library generated?
-coming soon
+A compatible HDF5 file contains these datasets:
+
+- `numvox`: voxel counts along each spatial axis
+- `min` and `max`: spatial bounds
+- `vis`: visibility payload with voxels on axis 0
+- `eff` (optional): global efficiency scale
+
+## Example data
+
+The installed helper scripts download public example libraries into the
+current directory:
+
+```bash
+download_icarus_plib.sh   # writes plib_icarus.h5
+download_2x2_plib.sh      # writes three 2x2 library files
+```
+
+Additional sample material is available in the
+[project Google Drive folder](https://drive.google.com/drive/folders/1IjRUMMVW7aiGWGcZFGRb9nT8dCRVYolE?usp=share_link).
+
+## Development
+
+Run the full suite with `pytest -q`. See [contributing.md](contributing.md) for
+the repository workflow and the
+[Read the Docs site](https://photonlib.readthedocs.io/) for API documentation.
+
+PhotonLib is released under the [MIT License](LICENSE.md).

@@ -3,7 +3,6 @@ from __future__ import annotations
 import h5py
 import torch
 import numpy as np
-from scipy.ndimage import sobel
 from .meta import VoxelMeta
 from .lazy import LazyTensor
 
@@ -107,31 +106,35 @@ class PhotonLib:
         return PhotonLib(self.meta, self.vis.to(device), self.eff.to(device), lazy=self._lazy)
 
     def visibility(self, x):
-        '''
-        A function meant for analysis/inference (not for training) that returns
-        the visibilities for all PMTs given the position(s) in x. Note x is not 
-        a normalized coordinate.
+        '''Return the visibility payload for one or more absolute positions.
 
         Parameters
         ----------
         x : torch.Tensor
-            A (or an array of) 3D point in the absolute coordinate
+            A point or batch of points in absolute detector coordinates.
         
         Returns
         -------
         torch.Tensor
-            An instance holding the visibilities in linear scale for the position(s) x.
+            Visibility values with shape ``x.shape[:-1] + self.vis.shape[1:]``.
+            Positions outside the photon-library volume are filled with zero.
         '''
-        pos = x
-        squeeze=False
-        if len(x.shape) == 1:
-            pos = pos[None,:]
-            squeeze=True
-        vis = torch.zeros(size=(pos.shape[0],self.n_pmts),dtype=torch.float32).to(self.device)
-        mask = self.meta.contain(pos)
-        vis[mask] = self.vis[self.meta.coord_to_voxel(pos[mask])]
+        pos = torch.as_tensor(x)
+        scalar_position = pos.ndim == 1
+        if scalar_position:
+            pos = pos[None, :]
 
-        return vis if not squeeze else vis.squeeze()
+        vis = torch.zeros(
+            (pos.shape[0], *self.vis.shape[1:]),
+            dtype=self.vis.dtype,
+            device=self.device,
+        )
+        mask = self.meta.contain(pos)
+        if torch.any(mask):
+            voxel_ids = self.meta.coord_to_voxel(pos[mask])
+            vis[mask.to(self.device)] = self.vis[voxel_ids]
+
+        return vis[0] if scalar_position else vis
 
     def gradx(self, x):
 
@@ -257,4 +260,3 @@ class PhotonLib:
                 f.create_dataset('eff', data=eff)
 
         print('[PhotonLib] file saved')
-

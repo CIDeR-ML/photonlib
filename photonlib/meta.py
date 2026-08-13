@@ -4,9 +4,6 @@ import h5py
 import torch
 import numpy as np
 
-from tqdm import tqdm
-from contextlib import contextmanager
-
 class AABox:
     '''
     Axis-Aligned bounding box in the N-dim cartesian coordinate
@@ -592,5 +589,4 @@ class VoxelMeta(AABox):
         idx[idx>=n] = n-1
 
         return idx
-
 

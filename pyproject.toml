@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photonlib"
+version = "0.2.0"
+description = "Photon-library lookup tools for liquid-argon TPC detectors"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE.md"}
+authors = [
+  {name = "Ka Vang (Patrick) Tsang"},
+  {name = "Carolyn Smith"},
+  {name = "Sam Young"},
+  {name = "Kazuhiro Terao"},
+]
+keywords = ["LArTPC", "photon library", "neutrino", "simulation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "gdown",
+  "h5py",
+  "numpy",
+  "torch",
+]
+
+[project.urls]
+Homepage = "https://github.com/CIDeR-ML/photonlib"
+Documentation = "https://photonlib.readthedocs.io/"
+Repository = "https://github.com/CIDeR-ML/photonlib.git"
+Issues = "https://github.com/CIDeR-ML/photonlib/issues"
+
+[tool.setuptools]
+packages = ["photonlib"]
+script-files = [
+  "bin/download_icarus_plib.sh",
+  "bin/download_2x2_plib.sh",
+]
