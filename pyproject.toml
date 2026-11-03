@@ -1,0 +1,4 @@
+[build-system]
+# setup.py imports skbuild, so isolated builds (pip, uv) need it before setup.py runs.
+requires = ["setuptools", "scikit-build"]
+build-backend = "setuptools.build_meta"
